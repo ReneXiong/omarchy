@@ -514,6 +514,17 @@ timeout 3 env OMARCHY_TEST_GSR_ALIVE=true \
   OMARCHY_SCREENRECORD_DIR="$recording_dir" \
   "$ROOT/bin/omarchy-capture-screenrecording" --stop-recording >/dev/null 2>&1 || true
 
+for attempt in {1..100}; do
+  (($(/usr/bin/pgrep -cf "$ROOT/bin/omarchy-capture-screenrecording") == 1)) && break
+  /usr/bin/sleep 0.01
+done
+watchers=$(/usr/bin/pgrep -cf "$ROOT/bin/omarchy-capture-screenrecording" || true)
+if ((watchers != 1)); then
+  rm -f "$OMARCHY_TEST_GSR_HELD"
+  fail "repeated stops while the recorder is stuck leave one watcher" "watchers: $watchers"
+fi
+pass "repeated stops while the recorder is stuck leave one watcher"
+
 rm -f "$OMARCHY_TEST_GSR_HELD"
 for attempt in {1..100}; do
   [[ -f $OMARCHY_TEST_INDICATOR_STATE ]] && break
@@ -522,11 +533,6 @@ done
 [[ $(cat "$OMARCHY_TEST_INDICATOR_STATE" 2>/dev/null) == "idle" ]] ||
   fail "a recorder that outlasts the foreground wait eventually refreshes idle" "$(cat "$sequence_file")"
 pass "a recorder that outlasts the foreground wait eventually refreshes idle"
-
-/usr/bin/sleep 0.2
-(($(grep -c 'omarchy.indicators refresh' "$sequence_file") == 1)) ||
-  fail "repeated stops while the recorder is stuck leave one watcher" "$(cat "$sequence_file")"
-pass "repeated stops while the recorder is stuck leave one watcher"
 
 # Clicking the indicator while it shows a stale 'active' state runs
 # --stop-recording; refreshing there lets the dead button recover by itself.
