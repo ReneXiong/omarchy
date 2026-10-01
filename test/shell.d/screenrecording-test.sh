@@ -473,3 +473,41 @@ pass "a redundant --stop-recording exits nonzero"
 grep -F 'omarchy.indicators refresh' "$sequence_file" >/dev/null ||
   fail "a redundant --stop-recording resyncs the indicator" "$(cat "$sequence_file")"
 pass "a redundant --stop-recording resyncs the indicator"
+
+# A graceful stop must clear the indicator before post-processing, which can
+# take seconds per recorded minute; only finalize_recording runs ffprobe.
+recording_file="$recording_dir/screenrecording-graceful.mp4"
+: >"$recording_file"
+echo "$recording_file" >"$XDG_RUNTIME_DIR/omarchy-screenrecord-filename"
+
+cat >"$stub_bin/pgrep" <<'SH'
+#!/bin/bash
+count=$(($(cat "$OMARCHY_TEST_PGREP_COUNT" 2>/dev/null || echo 0) + 1))
+echo "$count" >"$OMARCHY_TEST_PGREP_COUNT"
+((count == 1))
+SH
+
+cat >"$stub_bin/ffprobe" <<'SH'
+#!/bin/bash
+printf 'ffprobe %s\n' "$*" >>"$OMARCHY_TEST_SEQUENCE"
+exit 1
+SH
+
+cat >"$stub_bin/ffmpeg" <<'SH'
+#!/bin/bash
+printf 'ffmpeg %s\n' "$*" >>"$OMARCHY_TEST_SEQUENCE"
+exit 1
+SH
+
+chmod +x "$stub_bin"/pgrep "$stub_bin"/ffprobe "$stub_bin"/ffmpeg
+
+: >"$sequence_file"
+OMARCHY_TEST_PGREP_COUNT="$tmp_dir/pgrep-count" \
+  OMARCHY_SCREENRECORD_DIR="$recording_dir" \
+  "$ROOT/bin/omarchy-capture-screenrecording" --stop-recording >/dev/null 2>&1
+
+refresh_line=$(grep -n 'omarchy.indicators refresh' "$sequence_file" | head -1 | cut -d: -f1 || true)
+finalize_line=$(grep -n '^ffprobe ' "$sequence_file" | head -1 | cut -d: -f1 || true)
+[[ -n $refresh_line && -n $finalize_line ]] && ((refresh_line < finalize_line)) ||
+  fail "a graceful stop refreshes the indicator before post-processing" "$(cat "$sequence_file")"
+pass "a graceful stop refreshes the indicator before post-processing"

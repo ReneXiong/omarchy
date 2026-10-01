@@ -228,10 +228,14 @@ stop_screenrecording() {
 
   cleanup_webcam
 
+  # Refresh after the recorder has exited or been sent SIGKILL: refreshing while it
+  # is still alive leaves the indicator stuck 'active' on a force-kill.
   if pgrep -f "^gpu-screen-recorder" >/dev/null; then
     pkill -9 -f "^gpu-screen-recorder"
+    toggle_screenrecording_indicator
     omarchy-notification-send -u critical -t 5000 "Screen recording error" "Recording process had to be force-killed. Video may be corrupted."
   else
+    toggle_screenrecording_indicator
     finalize_recording
     local filename=$(cat "$RECORDING_FILE" 2>/dev/null)
     echo "$filename"
@@ -252,10 +256,6 @@ stop_screenrecording() {
       rm -f "$preview"
     ) &
   fi
-
-  # Refresh only after the kill/finalize decision is final: refreshing while the
-  # recorder is still alive leaves the indicator stuck 'active' on a force-kill.
-  toggle_screenrecording_indicator
 
   rm -f "$RECORDING_FILE"
 }
