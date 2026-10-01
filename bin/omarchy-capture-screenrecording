@@ -240,12 +240,14 @@ stop_screenrecording() {
     if screenrecording_active; then
       # Uninterruptible I/O can outlast the foreground wait. Refresh when it
       # finally exits without holding up the error notification or stop command.
+      # The lock keeps one watcher however often stop is pressed while it is stuck.
       (
+        flock -n 9 || exit 0
         while screenrecording_active; do
           sleep 1
         done
         toggle_screenrecording_indicator
-      ) </dev/null >/dev/null 2>&1 &
+      ) 9>"$RUNTIME_DIR/omarchy-screenrecord-watch.lock" </dev/null >/dev/null 2>&1 &
     else
       toggle_screenrecording_indicator
     fi

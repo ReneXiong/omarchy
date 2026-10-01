@@ -509,6 +509,11 @@ grep -F 'force-killed' "$OMARCHY_TEST_NOTIFICATION_ARGS" >/dev/null ||
   fail "a recorder held after SIGKILL posts the error notification"
 pass "a recorder held after SIGKILL returns without a premature refresh"
 
+# Stopping again while it is still stuck must not start a second watcher.
+timeout 3 env OMARCHY_TEST_GSR_ALIVE=true \
+  OMARCHY_SCREENRECORD_DIR="$recording_dir" \
+  "$ROOT/bin/omarchy-capture-screenrecording" --stop-recording >/dev/null 2>&1 || true
+
 rm -f "$OMARCHY_TEST_GSR_HELD"
 for attempt in {1..100}; do
   [[ -f $OMARCHY_TEST_INDICATOR_STATE ]] && break
@@ -517,6 +522,11 @@ done
 [[ $(cat "$OMARCHY_TEST_INDICATOR_STATE" 2>/dev/null) == "idle" ]] ||
   fail "a recorder that outlasts the foreground wait eventually refreshes idle" "$(cat "$sequence_file")"
 pass "a recorder that outlasts the foreground wait eventually refreshes idle"
+
+/usr/bin/sleep 0.2
+(($(grep -c 'omarchy.indicators refresh' "$sequence_file") == 1)) ||
+  fail "repeated stops while the recorder is stuck leave one watcher" "$(cat "$sequence_file")"
+pass "repeated stops while the recorder is stuck leave one watcher"
 
 # Clicking the indicator while it shows a stale 'active' state runs
 # --stop-recording; refreshing there lets the dead button recover by itself.
