@@ -510,9 +510,12 @@ grep -F 'force-killed' "$OMARCHY_TEST_NOTIFICATION_ARGS" >/dev/null ||
 pass "a recorder held after SIGKILL returns without a premature refresh"
 
 # Stopping again while it is still stuck must not start a second watcher.
-timeout 3 env OMARCHY_TEST_GSR_ALIVE=true \
+if ! timeout 3 env OMARCHY_TEST_GSR_ALIVE=true \
   OMARCHY_SCREENRECORD_DIR="$recording_dir" \
-  "$ROOT/bin/omarchy-capture-screenrecording" --stop-recording >/dev/null 2>&1 || true
+  "$ROOT/bin/omarchy-capture-screenrecording" --stop-recording >/dev/null 2>&1; then
+  rm -f "$OMARCHY_TEST_GSR_HELD"
+  fail "a second stop while the recorder is stuck does not block stopping"
+fi
 
 for attempt in {1..100}; do
   (($(/usr/bin/pgrep -cf "$ROOT/bin/omarchy-capture-screenrecording") == 1)) && break
