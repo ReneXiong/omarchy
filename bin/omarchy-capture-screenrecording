@@ -228,11 +228,27 @@ stop_screenrecording() {
 
   cleanup_webcam
 
-  # Refresh after the recorder has exited or been sent SIGKILL: refreshing while it
-  # is still alive leaves the indicator stuck 'active' on a force-kill.
+  # Refresh only once the recorder is gone: sending SIGKILL does not wait for exit.
   if pgrep -f "^gpu-screen-recorder" >/dev/null; then
     pkill -9 -f "^gpu-screen-recorder"
-    toggle_screenrecording_indicator
+    count=0
+    while screenrecording_active && ((count < 10)); do
+      sleep 0.1
+      count=$((count + 1))
+    done
+
+    if screenrecording_active; then
+      # Uninterruptible I/O can outlast the foreground wait. Refresh when it
+      # finally exits without holding up the error notification or stop command.
+      (
+        while screenrecording_active; do
+          sleep 1
+        done
+        toggle_screenrecording_indicator
+      ) </dev/null >/dev/null 2>&1 &
+    else
+      toggle_screenrecording_indicator
+    fi
     omarchy-notification-send -u critical -t 5000 "Screen recording error" "Recording process had to be force-killed. Video may be corrupted."
   else
     toggle_screenrecording_indicator
